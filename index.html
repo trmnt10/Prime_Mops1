@@ -112,6 +112,7 @@
     color:var(--mut);padding:4px 8px;white-space:nowrap}
   .tag.hot{border-color:var(--red);color:#fff}
   .empty{padding:22px 4px;color:var(--mut);font-size:14px}
+  .empty b{color:var(--ink)}
 
   /* ---------- player ---------- */
   .screen iframe{width:100%;aspect-ratio:16/9;border:0;background:#000;display:block}
@@ -156,7 +157,6 @@
   <div class="numbers">
     <div><b id="numFollowers">–</b><span>FOLLOWER</span></div>
     <div><b id="numViewers">–</b><span id="numViewersLbl">ZUSCHAUER</span></div>
-    <div><b id="numStreams" style="font-size:22px">–</b><span>STREAMS ERFASST</span></div>
   </div>
 
   <!-- SOCIAL-LINKS: hier deine echten URLs eintragen -->
@@ -186,7 +186,7 @@
 
   <div class="ticker"><div id="tickerEl">PRIME_MOPS1 ■ lädt … ■</div></div>
 
-  <div class="sechead"><h2>STREAM-VERLAUF</h2></div>
+  <div class="sechead"><h2 id="historyHead">STREAM-VERLAUF</h2></div>
   <div class="rule"></div>
   <div class="rows" id="historyRows"><div class="empty">Lädt Verlauf …</div></div>
 </div>
@@ -238,6 +238,7 @@
   }
 
   function renderHistory(lastBc){
+    $("historyHead").textContent="STREAM-VERLAUF";
     const box=$("historyRows");
     const rows=[...sessions].reverse();
     let html="";
@@ -256,7 +257,6 @@
         +"<div class='main'><b>"+esc(s.title||"Stream")+"</b><span>"+meta+"</span></div>"
         +"<div class='tag"+(run?" hot":"")+"'>"+(run?"● LIVE":esc(s.src==="manual"?"MANUELL":s.src==="api"?"API":"AUTO"))+"</div></div>";
     }).join("");
-    $("numStreams").textContent = fmtN.format(sessions.length + (lastBc&&lastBc.startedAt?1:0));
   }
 
   function update(d,live){
@@ -300,6 +300,45 @@
     sessions=sessions.slice(-200);
   }
 
+  // VODs (nur offline): TwitchTracker-Liste, Fallback letztes Broadcast, sonst LEER
+  let vodCache={t:0,items:[]};
+  async function getVods(lb){
+    const now=Date.now();
+    if(now-vodCache.t<10*60000) return vodCache.items;
+    let items=[];
+    if(window.root&&root.superFetch){
+      try{
+        const html=await root.superFetch("https://twitchtracker.com/"+LOGIN+"/streams").then(r=>r.text());
+        const re=/<td nowrap data-order="(\d{4}-\d{2}-\d{2} \d{2}:\d{2})">[\s\S]*?<td class="status[^"]*">([^<]*)<\/td>/g;
+        let m;
+        while((m=re.exec(html))&&items.length<8){
+          const t=new Date(m[1].replace(" ","T")+":00").getTime();
+          if(!isNaN(t)) items.push({start:t,end:t,title:(m[2]||"").trim()||"Stream",game:"",src:"vod"});
+        }
+        items.sort((a,b)=>b.start-a.start);
+      }catch(e){}
+    }
+    if(!items.length&&lb&&lb.startedAt){
+      try{ const t=new Date(lb.startedAt).getTime();
+        if(!isNaN(t)) items=[{start:t,end:t,title:lb.title||"Stream",game:"",src:"vod"}];
+      }catch(e){}
+    }
+    vodCache={t:now,items};
+    return items;
+  }
+
+  function renderVods(vods){
+    $("historyHead").textContent="LETZTE VODS";
+    const box=$("historyRows");
+    if(!vods.length){ box.innerHTML="<div class='empty'><b>LEER</b> – keine VODs gefunden.</div>"; return; }
+    box.innerHTML=vods.map(s=>{
+      const dstr=s.start?("<b>"+esc(fmtDay.format(new Date(s.start)))+"</b>"):"–";
+      return "<div class='row'><div class='date'>"+dstr+"</div>"
+        +"<div class='main'><b>"+esc(s.title||"Stream")+"</b><span></span></div>"
+        +"<div class='tag'>VOD</div></div>";
+    }).join("");
+  }
+
   // stiller Hintergrund-Refresh alle 15s
   async function refresh(){
     try{
@@ -307,7 +346,9 @@
       const live=!!(d.stream&&(d.stream.type==="live"||d.stream.viewersCount!=null));
       const last=snaps[snaps.length-1];
       if(!last||Date.now()-last.t>10000||lastLive!==live){ track(d,live); await kvSet("s",snaps); await kvSet("h",sessions); }
-      lastLive=live; update(d,live); renderHistory(d.lastBroadcast);
+      lastLive=live; update(d,live);
+      if(live) renderHistory(d.lastBroadcast);
+      else renderVods(await getVods(d.lastBroadcast));
     }catch(e){ console.warn(e); }
   }
 
@@ -320,7 +361,6 @@
     snaps=(await kvGet("s",[]))||[]; sessions=(await kvGet("h",[]))||[];
     if(!Array.isArray(snaps))snaps=[]; if(!Array.isArray(sessions))sessions=[];
     renderHistory(null);
-    $("numStreams").textContent=sessions.length?fmtN.format(sessions.length):"–";
     timer=setInterval(refresh,REFRESH_MS);
     await refresh();
   })();
