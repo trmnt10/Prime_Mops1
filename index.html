@@ -122,8 +122,8 @@
   /* ---------- ticker ---------- */
   .ticker{margin:26px -20px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
     overflow:hidden;white-space:nowrap;background:#0e1114}
-  .ticker div{display:inline-block;padding:10px 0;font-family:var(--mono);font-size:12.5px;letter-spacing:.1em;
-    animation:tick 30s linear infinite;will-change:transform;color:var(--ink)}
+  .ticker .track{display:inline-flex;white-space:nowrap;padding:10px 0;font-family:var(--mono);font-size:12.5px;
+    letter-spacing:.1em;color:var(--ink);animation:tick 40s linear infinite;will-change:transform}
   .ticker b{color:var(--lime)}
   @keyframes tick{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
@@ -229,7 +229,7 @@
     </div>
   </div>
 
-  <div class="ticker"><div id="tickerEl">PRIME_MOPS1 ■ lädt … ■</div></div>
+  <div class="ticker"><div class="track" id="tickerTrack"><span id="tickerA">PRIME_MOPS1 ■ lädt … ■&nbsp;</span><span id="tickerB">PRIME_MOPS1 ■ lädt … ■&nbsp;</span></div></div>
 
   <div class="sechead"><h2 id="historyHead">STREAM-VERLAUF</h2></div>
   <div class="rule"></div>
@@ -325,10 +325,12 @@
     const items = live
       ? ["JETZT <b>LIVE</b>", f+" FOLLOWER"]
       : ["GERADE <b>OFFLINE</b>", f+" FOLLOWER"];
-    const half = items.filter(Boolean).join(" &nbsp;■&nbsp; ")+" &nbsp;■&nbsp; ";
-    if($("tickerEl").dataset.half===half) return;
-    $("tickerEl").dataset.half=half;
-    $("tickerEl").innerHTML = half+half+half+half;
+    const seq = items.filter(Boolean).join(" &nbsp;■&nbsp; ")+" &nbsp;■&nbsp; ";
+    const half = seq+seq+seq;
+    const tr=$("tickerTrack");
+    if(tr.dataset.half===half) return;
+    tr.dataset.half=half;
+    $("tickerA").innerHTML=half; $("tickerB").innerHTML=half;
   }
 
   function renderHistory(lastBc){
